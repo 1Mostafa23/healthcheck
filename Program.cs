@@ -1,41 +1,53 @@
+using ConfigurationService.Data;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.AspNetCore.Routing; // Обеспечивает MapControllers и UseRouting
+using Npgsql.EntityFrameworkCore.PostgreSQL; // Может потребоваться для UseNpgsql
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+// ===================================================
+// 1. КОНФИГУРАЦИЯ СЕРВИСОВ (builder.Services)
+// ===================================================
+
+// Подключение и регистрация DbContext
+var connectionString = builder.Configuration.GetConnectionString("PostgreSqlConnection"); 
+
+// 💡 Наше подключение к PostgreSQL
+builder.Services.AddDbContext<AppDbContext>(options => 
+    options.UseNpgsql(connectionString));
+
+// Добавление контроллеров
+builder.Services.AddControllers();
+
+// Добавление Swagger/OpenAPI для документации API
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// ===================================================
+// 2. КОНФИГУРАЦИЯ ПРИЛОЖЕНИЯ (app.Use...)
+// ===================================================
+
+// Swagger UI доступен только в режиме разработки (Development)
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.UseSwagger();
+    app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+// 1. Сначала перенаправление на HTTPS (безопасность)
+app.UseHttpsRedirection(); 
 
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
+// 2. Авторизация (проверка прав доступа)
+app.UseAuthorization(); 
 
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
+// 3. КОНЕЦ КОНВЕЙЕРА: Запуск контроллеров
+app.MapControllers();
 
+// Запуск веб-сервера
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
